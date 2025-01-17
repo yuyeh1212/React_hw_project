@@ -1,0 +1,82 @@
+/* 設置全局字體與背景 */
+html, body {
+  height: 100%; /* 確保背景高度為瀏覽器高度 */
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #eef5ff, #86b6f6);
+}
+
+/* 頁面內容最小高度設置 */
+.container {
+  min-height: 100vh; /* 確保內容區塊至少撐滿視窗高度 */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* 調整內容布局 */
+  padding: 20px;
+}
+
+/* 表格間距與調整 */
+.table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.table th,
+.table td {
+  border: 1px solid #dee2e6;
+  padding: 8px;
+  text-align: center;
+}
+
+.table th {
+  background-color: #e9ecef;
+}
+
+/* 按鈕樣式 */
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+}
+
+/* 卡片圖片樣式 */
+.card-img-top {
+  height: 250px;
+  object-fit: cover;
+  width: 100%;
+}
+
+/* 多圖圖片樣式 */
+.img-thumbnail {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  margin: 5px;
+}
+
+/* 卡片連結樣式 */
+a.card {
+  text-decoration: none;
+  transition: transform 0.5s ease-in-out, box-shadow 0.5s ease-in-out;
+}
+
+a.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+}
+
+/* 調整間距 */
+h2 {
+  color: #343a40;
+  margin-bottom: 20px;
+}
+
+.container .row {
+  flex: 1; /* 撐滿剩餘空間 */
+}
