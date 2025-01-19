@@ -5,12 +5,9 @@ import "./style/login.scss";
 const API_URL = `${import.meta.env.VITE_BASE_URL}`;
 const API_PATH = `${import.meta.env.VITE_API_PATH}`;
 
-function ProductList({ products, onViewDetails, checkLogin }) {
+function ProductList({ products, onViewDetails }) {
   return (
     <div>
-      <button onClick={checkLogin} type="button" className="btn btn-primary">
-        確認是否登入
-      </button>
       <h2>產品列表</h2>
       <table className="table table-hover">
         <thead>
@@ -19,7 +16,7 @@ function ProductList({ products, onViewDetails, checkLogin }) {
             <th>原價</th>
             <th>售價</th>
             <th>是否啟用</th>
-            <th>查看細節</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -34,7 +31,7 @@ function ProductList({ products, onViewDetails, checkLogin }) {
                   className="btn btn-sm btn-primary"
                   onClick={() => onViewDetails(product)}
                 >
-                  查看細節
+                  操作按鈕
                 </button>
               </td>
             </tr>
@@ -45,45 +42,6 @@ function ProductList({ products, onViewDetails, checkLogin }) {
   );
 }
 
-function ProductDetails({ product }) {
-  return product ? (
-    <div>
-      <h2>單一產品細節</h2>
-      <div className="card mb-3 shadow">
-        <img
-          src={product.imageUrl}
-          className="card-img-top primary-image"
-          alt="主圖"
-        />
-        <div className="card-body">
-          <h5 className="card-title d-flex align-items-center">
-            {product.title}
-            <span className="badge bg-info ms-2">{product.category}</span>
-          </h5>
-          <p className="card-text">商品描述：{product.description}</p>
-          <p className="card-text">商品內容：{product.content}</p>
-          <p className="card-text text-danger">
-            售價：{product.price} 元 / {product.unit}
-          </p>
-          <h5 className="mt-3">更多圖片：</h5>
-          <div className="d-flex flex-wrap">
-            {product.imagesUrls.map((img, index) => (
-              <img
-                key={index}
-                src={img}
-                className="img-thumbnail"
-                alt={`圖片 ${index + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : (
-    <p className="text-secondary">請選擇一個商品查看</p>
-  );
-}
-
 function App() {
   const [isAuth, setIsAuth] = useState(false);
   const [account, setAccount] = useState({
@@ -91,18 +49,81 @@ function App() {
     password: "",
   });
   const [products, setProducts] = useState([]);
-  const [tempProduct, setTempProduct] = useState(null);
 
-  useEffect(() => {
-    if (isAuth) {
-      axios
-        .get(`${API_URL}/v2/api/${API_PATH}/admin/products`)
-        .then((res) => {
-          setProducts(res.data.products); // 假設 API 回傳資料中有 `products`
-        })
-        .catch((err) => console.error("取得產品資料失敗", err));
+  const checkLogin = async () => {
+    try {
+      const token = localStorage.getItem("hexToken");
+      const tokenExpiration = localStorage.getItem("tokenExpiration");
+  
+      if (!token || !tokenExpiration) {
+        throw new Error("未登入或令牌不存在");
+      }
+  
+      // 檢查是否超過過期時間
+      const now = new Date().getTime();
+      if (now > parseInt(tokenExpiration, 10)) {
+        throw new Error("令牌已過期");
+      }
+  
+      // 繼續檢查登入狀態
+      axios.defaults.headers.common["Authorization"] = token;
+      await axios.post(`${API_URL}/api/user/check`);
+      const res = await axios.get(`${API_URL}/v2/api/${API_PATH}/admin/products`);
+      setProducts(res.data.products);
+      setIsAuth(true);
+    } catch (err) {
+      console.error("登入檢查失敗或令牌已過期", err);
+  
+      // 清除過期令牌
+      localStorage.removeItem("hexToken");
+      localStorage.removeItem("tokenExpiration");
+      setIsAuth(false);
     }
-  }, [isAuth]);
+  };
+  
+  useEffect(() => {
+    // 獲取 token
+    const token = document.cookie.replace(
+      /(?:(?:^|.*;\s*)hexToken\s*\=\s*([^;]*).*$)|^.*$/,
+      "$1"
+    );
+  
+    if (token) {
+      // 設置 axios 預設的 Authorization
+      axios.defaults.headers.common["Authorization"] = token;
+  
+      // 自動檢查登入狀態
+      checkLogin();
+    }
+  
+    // 檢查 token 過期
+    const tokenExpiration = localStorage.getItem("tokenExpiration");
+    const now = new Date().getTime();
+  
+    if (tokenExpiration) {
+      const expirationTime = parseInt(tokenExpiration, 10);
+      const timeLeft = expirationTime - now;
+  
+      if (timeLeft > 0) {
+        // 設置定時器到期檢查
+        const timer = setTimeout(() => {
+          alert("您的登入已過期，請重新登入");
+          localStorage.removeItem("hexToken");
+          localStorage.removeItem("tokenExpiration");
+          setIsAuth(false);
+        }, timeLeft);
+  
+        // 清理定時器
+        return () => clearTimeout(timer);
+      } else {
+        // 已過期，立即處理
+        alert("您的登入已過期，請重新登入");
+        localStorage.removeItem("hexToken");
+        localStorage.removeItem("tokenExpiration");
+        setIsAuth(false);
+      }
+    }
+  }, []);  
 
   const handleInputChange = (e) => {
     const { value, name } = e.target;
@@ -113,52 +134,44 @@ function App() {
     });
   };
 
-  const hendleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    axios
-      .post(`${API_URL}/v2/admin/signin`, account)
-      .then((res) => {
-        const { token, expired } = res.data;
-        document.cookie = `hexToken=${token}; expires=${new Date(
-          expired
-        )}; path=/; SameSite=None; Secure`;
-
-        axios.defaults.headers.common["Authorization"] = token;
-
-        axios
-          .get(`${API_URL}/v2/api/${API_PATH}/admin/products`)
-          .then((res) => {
-            setProducts(res.data.products); // 假設 API 回傳資料中有 `products`
-          })
-          .catch((err) => alert("產品取得失敗"));
-        setIsAuth(true);
-      })
-      .catch((err) => alert("登入失敗"));
-  };
-
-  // 修正 checkLogin 函數，確保這個 URL 正確
-  const checkLogin = () => {
-    axios
-      .post(`${API_URL}/api/user/check`)
-      .then((res) => alert("已在登入狀態"))
-      .catch((err) => console.error("未登入", err));
-  };
+    try {
+      const res = await axios.post(`${API_URL}/v2/admin/signin`, account);
+      const { token, expired } = res.data;
+  
+      // 設置過期時間為 5 分鐘
+      const expirationTime = new Date().getTime() + 5 * 60 * 1000; // 當前時間 + 5 分鐘
+      document.cookie = `hexToken=${token}; expires=${new Date(
+        expirationTime
+      ).toUTCString()}; path=/; SameSite=None; Secure`;
+  
+      // 儲存到本地儲存
+      localStorage.setItem("hexToken", token);
+      localStorage.setItem("tokenExpiration", expirationTime);
+  
+      axios.defaults.headers.common["Authorization"] = token;
+  
+      // 獲取產品列表
+      const productsRes = await axios.get(`${API_URL}/v2/api/${API_PATH}/admin/products`);
+      setProducts(productsRes.data.products);
+  
+      setIsAuth(true);
+    } catch (err) {
+      alert("登入失敗");
+    }
+  };  
 
   return (
     <>
       {isAuth ? (
         <div className="container">
           <div className="row mt-5">
-            <div className="col-md-6">
-              {/* 傳遞 checkLogin 到 ProductList */}
+            <div className="col-md-12">
               <ProductList
                 products={products}
-                onViewDetails={setTempProduct}
-                checkLogin={checkLogin}
+                onViewDetails={(product) => alert(`點擊產品: ${product.title}`)}
               />
-            </div>
-            <div className="col-md-6">
-              <ProductDetails product={tempProduct} />
             </div>
           </div>
         </div>
@@ -166,7 +179,7 @@ function App() {
         <div className="d-flex justify-content-center align-items-center vh-100">
           <div className="text-center">
             <h1 className="mb-4">會員登入</h1>
-            <form onSubmit={hendleLogin}>
+            <form onSubmit={handleLogin}>
               <div className="form-floating mb-3">
                 <input
                   name="username"
