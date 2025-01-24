@@ -85,20 +85,15 @@ function App() {
         throw new Error("未登入或令牌不存在");
       }
 
-      // 檢查是否超過過期時間
       const now = new Date().getTime();
       if (now > parseInt(tokenExpiration, 10)) {
         throw new Error("令牌已過期");
       }
 
-      // 繼續檢查登入狀態
-      axios.defaults.headers.common["Authorization"] = token;
+      // 驗證登入狀態
       await axios.post(`${API_URL}/api/user/check`);
-      const res = await axios.get(
-        `${API_URL}/v2/api/${API_PATH}/admin/products`
-      );
-      setProducts(res.data.products);
       setIsAuth(true);
+      return true;
     } catch (err) {
       console.error("登入檢查失敗或令牌已過期", err);
 
@@ -106,6 +101,7 @@ function App() {
       localStorage.removeItem("hexToken");
       localStorage.removeItem("tokenExpiration");
       setIsAuth(false);
+      return false;
     }
   };
 
@@ -121,7 +117,12 @@ function App() {
       axios.defaults.headers.common["Authorization"] = token;
 
       // 自動檢查登入狀態
-      checkLogin();
+      checkLogin().then((isLoggedIn) => {
+        if (isLoggedIn) {
+          // 成功登入後載入產品列表
+          fetchProducts();
+        }
+      });
     }
 
     // 檢查 token 過期
@@ -227,20 +228,20 @@ function App() {
 
   const handleSubmitProduct = () => {
     const token = localStorage.getItem("hexToken") || getCookie("hexToken");
-  
+
     if (!token) {
       alert("Token 無效，請先登入！");
       return;
     }
-  
+
     const payload = {
       data: {
         ...newProduct,
-      origin_price: Number(newProduct.origin_price), // 強制轉換為數字
-      price: Number(newProduct.price), // 強制轉換為數字
+        origin_price: Number(newProduct.origin_price), // 強制轉換為數字
+        price: Number(newProduct.price), // 強制轉換為數字
       },
     };
-  
+
     axios
       .post(`${API_URL}/v2/api/${API_PATH}/admin/product`, payload, {
         headers: {
@@ -256,7 +257,35 @@ function App() {
         console.error("儲存失敗:", error.response?.data || error.message);
         alert(`儲存失敗: ${error.response?.data?.message || error.message}`);
       });
-  };    
+  };
+
+  const fetchProducts = () => {
+    const token = localStorage.getItem("hexToken") || getCookie("hexToken");
+
+    if (!token) {
+      alert("Token 無效，請先登入！");
+      return;
+    }
+
+    axios
+      .get(`${API_URL}/v2/api/${API_PATH}/admin/products`, {
+        headers: {
+          Authorization: token,
+        },
+      })
+      .then((response) => {
+        setProducts(response.data.products); // 更新產品列表狀態
+      })
+      .catch((error) => {
+        console.error(
+          "獲取產品列表失敗:",
+          error.response?.data || error.message
+        );
+        alert(
+          `獲取產品列表失敗: ${error.response?.data?.message || error.message}`
+        );
+      });
+  };
 
   return (
     <>
