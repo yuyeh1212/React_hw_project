@@ -249,13 +249,13 @@ function App() {
         },
       })
       .then((response) => {
-        console.log("產品儲存成功:", response.data);
-        alert("產品儲存成功！");
+        console.log("產品新增成功:", response.data);
+        alert("產品新增成功！");
         setShowModal(false);
       })
       .catch((error) => {
-        console.error("儲存失敗:", error.response?.data || error.message);
-        alert(`儲存失敗: ${error.response?.data?.message || error.message}`);
+        console.error("新增失敗:", error.response?.data || error.message);
+        alert(`新增失敗: ${error.response?.data?.message || error.message}`);
       });
   };
 
