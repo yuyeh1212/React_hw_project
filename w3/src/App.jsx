@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
+import ProductModal from "./ProductModal";
 import "./style/login.scss";
 
 const API_URL = `${import.meta.env.VITE_BASE_URL}`;
@@ -32,7 +33,13 @@ function ProductList({ products, onEdit, onDelete, onAddProduct }) {
               <td>{product.title}</td>
               <td>{product.origin_price}</td>
               <td>{product.price}</td>
-              <td>{product.isEnabled ? "啟用" : "未啟用"}</td>
+              <td>
+                {product.is_enabled ? (
+                  <span className="text-success">啟用</span>
+                ) : (
+                  <span className="text-danger">未啟用</span>
+                )}
+              </td>
               <td>
                 <button
                   className="btn btn-sm btn-primary me-2"
@@ -58,23 +65,25 @@ function ProductList({ products, onEdit, onDelete, onAddProduct }) {
 function App() {
   const [isAuth, setIsAuth] = useState(false);
   const [account, setAccount] = useState({
-    username: "herry861212@gmail.com",
-    password: "a22447887",
+    username: "",
+    password: "",
   });
-  const [products, setProducts] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    title: "",
-    category: "",
-    origin_price: 0,
-    price: 0,
-    unit: "",
-    description: "",
-    content: "",
-    is_enabled: 0,
-    imageUrl: "",
-    imagesUrl: [],
-  });
+  const [products, setProducts] = useState([]); // 產品列表
+  const [modalProduct, setModalProduct] = useState(null); // 當前正在新增或編輯的產品
+  const handleAddProduct = () => {
+    setModalProduct({
+      title: "",
+      category: "",
+      origin_price: 0,
+      price: 0,
+      unit: "",
+      description: "",
+      content: "",
+      is_enabled: 0,
+      imageUrl: "",
+      imagesUrls: [],
+    });
+  };
 
   const checkLogin = async () => {
     try {
@@ -154,22 +163,20 @@ function App() {
     }
   }, []);
 
+  const getCookie = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(";").shift();
+    return null;
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
-    if (Object.keys(newProduct).includes(name)) {
-      // 更新 newProduct 狀態
-      setNewProduct({
-        ...newProduct,
-        [name]: value,
-      });
-    } else if (Object.keys(account).includes(name)) {
-      // 更新 account 狀態（針對登入）
-      setAccount({
-        ...account,
-        [name]: value,
-      });
-    }
+    setAccount({
+      ...account,
+      [name]: value,
+    });
   };
 
   const handleLogin = async (e) => {
@@ -178,23 +185,20 @@ function App() {
       const res = await axios.post(`${API_URL}/v2/admin/signin`, account);
       const { token, expired } = res.data;
 
-      // 設置過期時間為 5 分鐘
-      const expirationTime = new Date().getTime() + 5 * 60 * 1000; // 當前時間 + 5 分鐘
+      // 設置過期時間
+      const expirationTime = new Date().getTime() + 5 * 60 * 1000;
       document.cookie = `hexToken=${token}; expires=${new Date(
         expirationTime
       ).toUTCString()}; path=/; SameSite=None; Secure`;
 
-      // 儲存到本地儲存
+      // 儲存到本地
       localStorage.setItem("hexToken", token);
       localStorage.setItem("tokenExpiration", expirationTime);
 
       axios.defaults.headers.common["Authorization"] = token;
 
       // 獲取產品列表
-      const productsRes = await axios.get(
-        `${API_URL}/v2/api/${API_PATH}/admin/products`
-      );
-      setProducts(productsRes.data.products);
+      await fetchProducts();
 
       setIsAuth(true);
     } catch (err) {
@@ -203,8 +207,52 @@ function App() {
   };
 
   const handleEditProduct = (product) => {
-    alert(`編輯產品：${product.title}`);
-    // 在這裡可以彈出編輯表單，或導向編輯頁面。
+    setModalProduct(product);
+  };
+
+  const handleSubmitProduct = async () => {
+    const token = localStorage.getItem("hexToken");
+
+    if (!token) {
+      alert("Token 無效，請先登入！");
+      return;
+    }
+
+    const payload = {
+      data: { ...modalProduct },
+    };
+
+    try {
+      if (modalProduct.id) {
+        // 編輯產品
+        await axios.put(
+          `${API_URL}/v2/api/${API_PATH}/admin/product/${modalProduct.id}`,
+          payload,
+          {
+            headers: { Authorization: token },
+          }
+        );
+        alert("產品更新成功！");
+      } else {
+        // 新增產品
+        await axios.post(
+          `${API_URL}/v2/api/${API_PATH}/admin/product`,
+          payload,
+          {
+            headers: { Authorization: token },
+          }
+        );
+        alert("產品新增成功！");
+      }
+
+      // 清空 Modal 狀態
+      setModalProduct(null);
+
+      // 重新載入產品列表
+      await fetchProducts();
+    } catch (err) {
+      alert(`操作失敗: ${err.response?.data?.message || err.message}`);
+    }
   };
 
   const handleDeleteProduct = async (productId) => {
@@ -222,11 +270,29 @@ function App() {
     }
   };
 
-  const handleAddProduct = () => {
-    setShowModal(true); // 開啟 Modal
+  const fetchProducts = async () => {
+    const token = localStorage.getItem("hexToken");
+
+    if (!token) {
+      alert("Token 無效，請先登入！");
+      return;
+    }
+
+    try {
+      const res = await axios.get(
+        `${API_URL}/v2/api/${API_PATH}/admin/products`,
+        {
+          headers: { Authorization: token },
+        }
+      );
+      setProducts(res.data.products || []); // 更新產品列表
+    } catch (err) {
+      console.error("載入產品列表失敗:", err.response?.data || err.message);
+      alert("載入產品列表失敗，請稍後再試");
+    }
   };
 
-  const handleSubmitProduct = () => {
+  const handleSubmitEdit = () => {
     const token = localStorage.getItem("hexToken") || getCookie("hexToken");
 
     if (!token) {
@@ -235,55 +301,29 @@ function App() {
     }
 
     const payload = {
-      data: {
-        ...newProduct,
-        origin_price: Number(newProduct.origin_price), // 強制轉換為數字
-        price: Number(newProduct.price), // 強制轉換為數字
-      },
+      data: { ...currentProduct },
     };
 
     axios
-      .post(`${API_URL}/v2/api/${API_PATH}/admin/product`, payload, {
-        headers: {
-          Authorization: token,
-        },
-      })
-      .then((response) => {
-        console.log("產品新增成功:", response.data);
-        alert("產品新增成功！");
-        setShowModal(false);
+      .put(
+        `${API_URL}/v2/api/${API_PATH}/admin/product/${currentProduct.id}`,
+        payload,
+        {
+          headers: {
+            Authorization: token,
+          },
+        }
+      )
+      .then(() => {
+        alert("產品更新成功！");
+        setShowEditModal(false);
+
+        // 重新獲取產品列表
+        fetchProducts();
       })
       .catch((error) => {
-        console.error("新增失敗:", error.response?.data || error.message);
-        alert(`新增失敗: ${error.response?.data?.message || error.message}`);
-      });
-  };
-
-  const fetchProducts = () => {
-    const token = localStorage.getItem("hexToken") || getCookie("hexToken");
-
-    if (!token) {
-      alert("Token 無效，請先登入！");
-      return;
-    }
-
-    axios
-      .get(`${API_URL}/v2/api/${API_PATH}/admin/products`, {
-        headers: {
-          Authorization: token,
-        },
-      })
-      .then((response) => {
-        setProducts(response.data.products); // 更新產品列表狀態
-      })
-      .catch((error) => {
-        console.error(
-          "獲取產品列表失敗:",
-          error.response?.data || error.message
-        );
-        alert(
-          `獲取產品列表失敗: ${error.response?.data?.message || error.message}`
-        );
+        console.error("更新失敗:", error.response?.data || error.message);
+        alert(`更新失敗: ${error.response?.data?.message || error.message}`);
       });
   };
 
@@ -295,124 +335,36 @@ function App() {
             <div className="col-md-12">
               <ProductList
                 products={products}
-                onEdit={(product) => alert(`編輯產品：${product.title}`)}
-                onDelete={(productId) => alert(`刪除產品 ID：${productId}`)}
-                onAddProduct={handleAddProduct}
+                onEdit={handleEditProduct} // 編輯按鈕
+                onDelete={handleDeleteProduct} // 刪除按鈕
+                onAddProduct={handleAddProduct} // 新增按鈕
               />
             </div>
           </div>
-          {/* Modal 彈出視窗 */}
-          {showModal && (
-            <div className="modal show d-block" tabIndex="-1">
-              <div className="modal-dialog">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h5 className="modal-title">新增產品</h5>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={() => setShowModal(false)}
-                    ></button>
-                  </div>
-                  <div className="modal-body">
-                    <div className="mb-3">
-                      <label className="form-label">產品名稱</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="title"
-                        value={newProduct.title}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">分類</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="category"
-                        value={newProduct.category}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">原價</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="origin_price"
-                        value={newProduct.origin_price}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">售價</label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="price"
-                        value={newProduct.price}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">單位</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="unit"
-                        value={newProduct.unit}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">描述</label>
-                      <textarea
-                        className="form-control"
-                        name="description"
-                        value={newProduct.description}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">內容</label>
-                      <textarea
-                        className="form-control"
-                        name="content"
-                        value={newProduct.content}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label className="form-label">主要圖片 URL</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="imageUrl"
-                        value={newProduct.imageUrl}
-                        onChange={handleInputChange}
-                      />
-                    </div>
-                  </div>
-                  <div className="modal-footer">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setShowModal(false)}
-                    >
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleSubmitProduct}
-                    >
-                      新增
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+
+          {/* 渲染共用的 Modal */}
+          {modalProduct && (
+            <ProductModal
+              product={modalProduct}
+              isEditMode={!!modalProduct?.id}
+              onClose={() => {
+                setModalProduct(null); // 清空 modalProduct
+              }}
+              onInputChange={(e) => {
+                const { name, value } = e.target;
+                setModalProduct((prev) => ({
+                  ...prev,
+                  [name]:
+                    name === "origin_price" || name === "price"
+                      ? Number(value)
+                      : value, // 確保數字類型
+                }));
+              }}
+              onSubmit={async () => {
+                await handleSubmitProduct(); // 提交後更新產品
+                await fetchProducts(); // 確保主列表即時更新
+              }}
+            />
           )}
         </div>
       ) : (
