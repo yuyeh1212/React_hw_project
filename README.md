@@ -11,6 +11,6 @@
 </ul>
 
 <h3>連結</h3>
-<a href="https://yuyeh1212.github.io/React_hw_project/" traget="_blank">Github Pages</a>
+<a href="https://yuyeh1212.github.io/React_hw_project/" target="_blank">Github Pages</a>
 
-<a href="https://github.com/yuyeh1212/React_hw_project" traget="_blank">GitHub Repo</a>
+<a href="https://github.com/yuyeh1212/React_hw_project" target="_blank">GitHub Repo</a>
